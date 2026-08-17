@@ -84,11 +84,15 @@ def _run_scrape(username: str, from_date: date, to_date: date) -> None:
     with st.status(f"Scraping {username} from Leo…", expanded=True) as status:
         try:
             st.write("Logging in and scraping the bet list + account details…")
+            # Scrape the union of the selected range and an 8-day window ending on
+            # the To date, so the main summary always covers the full selected
+            # range AND the day-by-day comparison gets a complete 8-day window.
+            scrape_from = min(from_date, to_date - timedelta(days=7))
             players = scraper.run_scraper(
-                [username], from_date.strftime("%m/%d/%Y"), to_date.strftime("%m/%d/%Y"), *creds
+                [username], scrape_from.strftime("%m/%d/%Y"), to_date.strftime("%m/%d/%Y"), *creds
             )
             st.write("Building the player summary…")
-            summaries = summary.build_summaries(players, _report_date_label(from_date, to_date))
+            summaries = summary.build_summaries(players, _report_date_label(from_date, to_date), from_date, to_date)
             st.session_state["summaries"] = summaries
             status.update(label=f"Built the quick summary for {username}.", state="complete", expanded=False)
         except Exception as exc:  # noqa: BLE001 - surface scrape errors to the user

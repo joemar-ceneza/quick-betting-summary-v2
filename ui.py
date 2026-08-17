@@ -53,6 +53,51 @@ def _winloss_class(value) -> str:
     return "pos" if value >= 0 else "neg"
 
 
+def _delta_badge(delta) -> str:
+    """▲/▼ change badge vs the previous day; empty when there's no previous day."""
+    if delta is None:
+        return ""
+    if delta > 0:
+        return f"<span class='qs-dup'>▲ {delta:+,.0f}</span>"
+    if delta < 0:
+        return f"<span class='qs-ddown'>▼ {delta:+,.0f}</span>"
+    return "<span class='qs-dup'>± 0</span>"
+
+
+def _daily_html(record: dict) -> str:
+    """HTML for the Day-by-Day Comparison table (empty string when no data)."""
+    daily = record.get("Daily") or []
+    if not daily:
+        return ""
+    body = ""
+    for d in daily:
+        rounds = f"{d['rounds']:,.0f}" if d["rounds"] else "0"
+        body += (
+            "<tr>"
+            f"<td class='qs-ddate'>{d['date']}</td>"
+            f"<td>{rounds}{_delta_badge(d.get('rounds_delta'))}</td>"
+            f"<td>{_fmt_num(d['won'])}</td>"
+            f"<td>{_fmt_num(d['lose'])}</td>"
+            f"<td>{_fmt_num(d['draw'])}</td>"
+            f"<td class='{_winloss_class(d['net'])}'>{_fmt_num(d['net'], signed=True)}{_delta_badge(d.get('net_delta'))}</td>"
+            f"<td>{_fmt_pct(d['win_pct'])}</td>"
+            f"<td>{_fmt_num(d['max_stake'])}</td>"
+            "</tr>"
+        )
+    return (
+        "<div class='qs-daily'>"
+        "<div class='qs-daily-title'>Day-by-Day Comparison</div>"
+        "<table class='qs-table'>"
+        "<thead><tr>"
+        "<th>Date</th><th>Rounds Played</th><th>Won</th><th>Lose</th><th>Draw</th>"
+        "<th>Member Win/Loss</th><th>Win %</th><th>Max Stake</th>"
+        "</tr></thead>"
+        f"<tbody>{body}</tbody>"
+        "</table>"
+        "</div>"
+    )
+
+
 
 
 # ======================================================
@@ -135,6 +180,19 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] {
   gap: 12px;
 }
+
+/* Day-by-Day Comparison table */
+.qs-daily { margin-top: 2px; }
+.qs-daily-title { font-size: 13px; font-weight: 800; letter-spacing:-.01em; margin-bottom: 8px; opacity:.9; }
+.qs-table { width:100%; border-collapse: collapse; font-size: 12.5px; }
+.qs-table th { text-align:left; padding:8px 10px; font-size:11px; font-weight:600; opacity:.6;
+  border-bottom:1px solid var(--line); white-space:nowrap; }
+.qs-table td { padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+.qs-table tr:last-child td { border-bottom:none; }
+.qs-table td.pos { color:var(--success); } .qs-table td.neg { color:var(--danger); }
+.qs-ddate { font-weight:700; }
+.qs-dup { color:var(--success); font-size:11px; margin-left:5px; font-weight:700; }
+.qs-ddown { color:var(--danger); font-size:11px; margin-left:5px; font-weight:700; }
 """
 
 
@@ -245,6 +303,12 @@ def _render_player_card(record: dict) -> None:
                 height=100,
                 placeholder="Type the conclusion here…",
             )
+
+    # Day-by-Day Comparison — separate collapsible section below the summary
+    daily_html = _daily_html(record)
+    if daily_html:
+        with st.expander("📅 Day-by-Day Comparison"):
+            st.markdown(daily_html, unsafe_allow_html=True)
 
 
 # ======================================================
