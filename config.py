@@ -25,7 +25,7 @@ CURRENCY_MAP = {"Pp": "IDR", "TB": "THB"}
 SBO_BACCARAT_LABEL = "SBO Baccarat"  # reporting label for Baccarat tables A-Z / 1-9
 
 # Timeouts (milliseconds)
-ELEMENT_TIMEOUT = 10000
+ELEMENT_TIMEOUT = 300000
 TABLE_TIMEOUT = 15000
 
 # Betting-pattern tuning (same 9 tag definitions as betting-behavior)
