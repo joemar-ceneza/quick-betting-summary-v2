@@ -5,6 +5,7 @@ in the browser. Public entry points: inject_theme() and render_summaries().
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import config
 
@@ -23,11 +24,12 @@ def _rgba(hex_color: str, alpha: float) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
-def _fmt_num(value, signed: bool = False) -> str:
+def _fmt_num(value, signed: bool = False, decimals: int = 0) -> str:
     """Format a number for display; None becomes an em dash."""
     if value is None:
         return "—"
-    return f"{value:+,.0f}" if signed else f"{value:,.0f}"
+    fmt = f"{{value:+,.{decimals}f}}" if signed else f"{{value:,.{decimals}f}}"
+    return fmt.format(value=value)
 
 
 def _fmt_pct(value) -> str:
@@ -98,15 +100,9 @@ def _daily_html(record: dict) -> str:
     )
 
 
-
-
 # ======================================================
 # THEME (CSS)
 # ======================================================
-# Theme-neutral by design: no background or text colors are forced on the app.
-# Panels are translucent tints over Streamlit's own theme background and text
-# inherits Streamlit's theme color, so the report follows the light/dark toggle
-# instantly (st.context.theme only refreshes on the next rerun — not enough).
 _CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 html, body, [class*="css"] { font-family:'Inter',-apple-system,'Segoe UI',sans-serif; }
@@ -148,25 +144,41 @@ footer { display: none !important; }
 .qs-landing .head { font-size:16px; font-weight:700; }
 .qs-landing .body { opacity:.85; margin-top:8px; line-height:1.6; }
 
-/* Editable Betting Pattern / Conclusion inputs — match the card panels */
+/* Editable Betting Pattern / Conclusion inputs — match the card panels.
+   Base rule = fixed 100px box (Betting Pattern keeps this). */
 div[data-testid="stTextArea"] > div { gap:4px; }
 div[data-testid="stTextArea"] label p { font-size:11.5px; font-weight:600; opacity:.65; letter-spacing:.01em; }
 div[data-testid="stTextArea"] textarea {
-  background-color: var(--panel2);
+  background-color: var(--panel2) !important;
   border:1px solid var(--line) !important;
-  border-radius:10px;
-  color:inherit;
-  font-family:inherit;
-  font-size:14px;
-  font-weight:600;
-  line-height:1.5;
-  padding:10px 14px;
+  border-radius:10px !important;
+  color:inherit !important;
+  font-family:inherit !important;
+  font-size:14px !important;
+  font-weight:600 !important;
+  line-height:1.5 !important;
+  padding:10px 14px !important;
+  height:100px !important;
+  min-height:100px !important;
+  max-height:100px !important;
+  overflow-y:auto !important;   /* long text scrolls inside the fixed box */
+  resize:none !important;
 }
 div[data-testid="stTextArea"] textarea:focus {
   border-color: var(--panel2) !important;
-  box-shadow:0 0 0 1px var(--line) inset;
+  box-shadow:0 0 0 1px var(--line) inset !important;
 }
-div[data-testid="stTextArea"] textarea::placeholder { color:inherit; opacity:.4; font-weight:500; }
+div[data-testid="stTextArea"] textarea::placeholder { color:inherit !important; opacity:.4 !important; font-weight:500 !important; }
+
+/* Conclusion only: grow taller with its content (key-scoped, Streamlit >= 1.39) */
+div[class*="st-key-concl_"] textarea {
+  field-sizing: content;
+  height:auto !important;
+  min-height:100px !important;
+  max-height:none !important;
+  overflow-y:hidden !important;
+  resize:vertical !important;
+}
 
 /* Player card = a bordered container so the Betting Pattern / Conclusion
    inputs live inside the same main box as the stats */
@@ -195,6 +207,30 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerti
 .qs-ddown { color:var(--danger); font-size:11px; margin-left:5px; font-weight:700; }
 """
 
+# Fallback auto-grow for browsers without CSS `field-sizing` (Safari, Firefox).
+# Runs inside a 0-height iframe and reaches into the parent document, which is
+# the only way to script Streamlit's DOM. Scoped to the Conclusion textarea.
+_AUTOGROW_JS = """
+<script>
+const doc = window.parent.document;
+const fit = (ta) => {
+    if (CSS.supports('field-sizing', 'content')) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.max(ta.scrollHeight, 100) + 'px';
+};
+const wire = () => doc
+    .querySelectorAll('div[class*="st-key-concl_"] textarea')
+    .forEach(ta => {
+        fit(ta);
+        if (ta.dataset.autofit) return;
+        ta.dataset.autofit = '1';
+        ta.addEventListener('input', () => fit(ta));
+    });
+wire();
+new MutationObserver(wire).observe(doc.body, {childList: true, subtree: true});
+</script>
+"""
+
 
 def inject_theme() -> None:
     """Public: apply the shared font + design tokens; follows Streamlit's light/dark theme."""
@@ -206,27 +242,34 @@ def inject_theme() -> None:
         f"--line:{_rgba(config.T_NEUTRAL, 0.25)};"
     )
     st.markdown(f"<style>:root{{{root_vars}}}{_CSS}</style>", unsafe_allow_html=True)
+    components.html(_AUTOGROW_JS, height=0)
 
 
 # ======================================================
 # SECTIONS
 # ======================================================
 def _render_header(summaries: list[dict]) -> None:
+    """Render the report header with the date extracted from the first summary."""
     report_date = summaries[0]["Date"] if summaries else "—"
     st.markdown(
         "<div class='qs-header'>"
         "<span class='qs-title'>🎴 Quick Summary Report</span>"
         "<span class='qs-spacer'></span>"
+        f"<span class='qs-chip'>Report Date: <b>{report_date}</b></span>"
         "</div>",
         unsafe_allow_html=True,
     )
 
 
 def _render_player_card(record: dict) -> None:
+    """Render an individual player's summary card."""
     status = record["Status"]
     status_color, status_bg = _status_theme(status)
     winloss = record["Total Member Win/Loss"]
     wl_class = _winloss_class(winloss)
+
+    # Sanitize username to ensure safe Streamlit widget keys (no spaces/special chars)
+    safe_username = str(record.get("Username", "unknown")).replace(" ", "_").replace("@", "_")
 
     kpis = [
         ("Total Rounds Played", _fmt_num(record["Total Rounds Played"]), ""),
@@ -284,30 +327,24 @@ def _render_player_card(record: dict) -> None:
             unsafe_allow_html=True,
         )
 
-        # User-editable fields (Betting Pattern + Conclusion) — typed values
-        # persist for the session via their stable widget keys.
-        pat_col, conc_col = st.columns(2)
-        with pat_col:
-            st.text_area(
-                "Betting Pattern",
-                value=record.get("Betting Pattern", ""),
-                key=f"bp_{record['Username']}",
-                height=100,
-                placeholder="Type the betting pattern here…",
-            )
-        with conc_col:
-            st.text_area(
-                "Conclusion",
-                value=record.get("Conclusion", "Normal"),
-                key=f"concl_{record['Username']}",
-                height=100,
-                placeholder="Type the conclusion here…",
-            )
+        # User-editable fields (Betting Pattern = fixed box, Conclusion = auto-grow)
+        st.text_area(
+            "Betting Pattern",
+            value=record.get("Betting Pattern", ""),
+            key=f"bp_{safe_username}",
+            placeholder="Type the betting pattern here...",
+        )
+        st.text_area(
+            "Conclusion",
+            value=record.get("Conclusion", "Normal"),
+            key=f"concl_{safe_username}",
+            placeholder="Type the conclusion here...",
+        )
 
     # Day-by-Day Comparison — separate collapsible section below the summary
     daily_html = _daily_html(record)
     if daily_html:
-        with st.expander("📅 Day-by-Day Comparison"):
+        with st.expander(" Day-by-Day Comparison"):
             st.markdown(daily_html, unsafe_allow_html=True)
 
 
