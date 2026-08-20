@@ -5,7 +5,6 @@ in the browser. Public entry points: inject_theme() and render_summaries().
 """
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 import config
 
@@ -207,30 +206,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerti
 .qs-ddown { color:var(--danger); font-size:11px; margin-left:5px; font-weight:700; }
 """
 
-# Fallback auto-grow for browsers without CSS `field-sizing` (Safari, Firefox).
-# Runs inside a 0-height iframe and reaches into the parent document, which is
-# the only way to script Streamlit's DOM. Scoped to the Conclusion textarea.
-_AUTOGROW_JS = """
-<script>
-const doc = window.parent.document;
-const fit = (ta) => {
-    if (CSS.supports('field-sizing', 'content')) return;
-    ta.style.height = 'auto';
-    ta.style.height = Math.max(ta.scrollHeight, 100) + 'px';
-};
-const wire = () => doc
-    .querySelectorAll('div[class*="st-key-concl_"] textarea')
-    .forEach(ta => {
-        fit(ta);
-        if (ta.dataset.autofit) return;
-        ta.dataset.autofit = '1';
-        ta.addEventListener('input', () => fit(ta));
-    });
-wire();
-new MutationObserver(wire).observe(doc.body, {childList: true, subtree: true});
-</script>
-"""
-
 
 def inject_theme() -> None:
     """Public: apply the shared font + design tokens; follows Streamlit's light/dark theme."""
@@ -242,7 +217,6 @@ def inject_theme() -> None:
         f"--line:{_rgba(config.T_NEUTRAL, 0.25)};"
     )
     st.markdown(f"<style>:root{{{root_vars}}}{_CSS}</style>", unsafe_allow_html=True)
-    components.html(_AUTOGROW_JS, height=0)
 
 
 # ======================================================
