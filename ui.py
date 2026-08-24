@@ -1,7 +1,8 @@
 """Presentation layer for the Quick Summary report (Streamlit).
 
 Renders the summary records built by summary.build_summaries() as player cards
-in the browser. Public entry points: inject_theme() and render_summaries().
+in the browser. Public entry points: inject_theme(), render_landing(),
+render_summaries() and render_footer().
 """
 
 import streamlit as st
@@ -204,6 +205,25 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerti
 .qs-ddate { font-weight:700; }
 .qs-dup { color:var(--success); font-size:11px; margin-left:5px; font-weight:700; }
 .qs-ddown { color:var(--danger); font-size:11px; margin-left:5px; font-weight:700; }
+
+/* Footer — sits at the bottom of the window on short pages, and moves down
+   with the content on long ones. Streamlit wraps every element in its own
+   container, so the auto margin has to go on the wrapper, not on .qs-footer. */
+[data-testid="stMain"] { display:flex; flex-direction:column; }
+[data-testid="stMain"] .block-container { flex:1 1 auto; display:flex; flex-direction:column; }
+[data-testid="stMain"] .block-container > div[data-testid="stVerticalBlock"] { flex:1 1 auto; }
+[data-testid="stElementContainer"]:has(.qs-footer) { margin-top:auto; }
+
+.qs-footer {
+  padding: 22px 20px 4px;
+  text-align: center;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  opacity: .55;
+  letter-spacing: .01em;
+}
+.qs-footer a { color:inherit; font-weight:600; text-decoration:none; }
+.qs-footer a:hover { opacity:1; text-decoration:underline; }
 """
 
 
@@ -335,10 +355,21 @@ def render_landing() -> None:
         "from Leo and shows the full quick summary here in the browser.</div></div>",
         unsafe_allow_html=True,
     )
+    render_footer()
 
 
 def render_summaries(summaries: list[dict]) -> None:
-    """Render the full quick-summary report: header and player cards."""
+    """Render the full quick-summary report: header, player cards and footer."""
     _render_header(summaries)
     for record in summaries:
         _render_player_card(record)
+    render_footer()
+
+
+def render_footer() -> None:
+    """Render the copyright footer. Call last on any page — the CSS pushes it
+    to the bottom of the window when the page is shorter than the viewport."""
+    st.markdown(
+        "<div class='qs-footer'>© Copyright. All rights reserved. Made by Joemar</div>",
+        unsafe_allow_html=True,
+    )
